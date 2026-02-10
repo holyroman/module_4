@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from jose import jwt, JWTError
 
 from app.schemas import TokenData
+from app.utils.exceptions import UnauthorizedException
 
 
 # JWT 설정 상수
@@ -79,7 +80,7 @@ def decode_access_token(token: str) -> TokenData:
         payload = jwt.decode(token, secret_key, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
-            raise JWTError("Invalid token")
+            raise UnauthorizedException("유효하지 않은 토큰입니다")
         return TokenData(email=email)
     except JWTError:
-        raise JWTError("유효하지 않은 토큰입니다")
+        raise UnauthorizedException("유효하지 않은 토큰입니다")

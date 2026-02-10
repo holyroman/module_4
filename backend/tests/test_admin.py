@@ -198,14 +198,8 @@ def test_admin_logout_without_token(client):
     assert response.status_code == 401
 
 
-@pytest.mark.skip(reason="JWT 예외 처리 미구현 - JWTError가 500으로 전파됨")
 def test_admin_logout_with_invalid_token(client):
-    """유효하지 않은 토큰으로 로그아웃 시도 실패
-
-    TODO: JWTError 예외 핸들러 추가 필요
-    - app/utils/auth.py의 decode_access_token에서 JWTError를 UnauthorizedException으로 변환
-    - 또는 main.py에 JWTError 전역 예외 핸들러 추가
-    """
+    """유효하지 않은 토큰으로 로그아웃 시도 실패"""
     response = client.post(
         "/api/admin/auth/logout",
         headers={"Authorization": "Bearer invalid.token.format"}
@@ -523,14 +517,8 @@ def test_deleted_session_denies_access(client, db_session, super_admin_token):
     assert response.status_code == 401
 
 
-@pytest.mark.skip(reason="JWT 예외 처리 미구현 - JWTError가 500으로 전파됨")
 def test_invalid_token_format_denies_access(client):
-    """잘못된 형식의 토큰은 접근 거부
-
-    TODO: JWTError 예외 핸들러 추가 필요
-    - app/utils/auth.py의 decode_access_token에서 JWTError를 UnauthorizedException으로 변환
-    - 또는 main.py에 JWTError 전역 예외 핸들러 추가
-    """
+    """잘못된 형식의 토큰은 접근 거부"""
     response = client.get(
         "/api/admin/users",
         headers={"Authorization": "Bearer invalid.token.format"}
