@@ -14,9 +14,10 @@
 5. [설치 및 실행](#설치-및-실행)
 6. [API 문서](#api-문서)
 7. [인증 시스템](#인증-시스템)
-8. [에러 처리](#에러-처리)
-9. [테스트](#테스트)
-10. [배포 가이드](#배포-가이드)
+8. [관리자 시스템](#관리자-시스템)
+9. [에러 처리](#에러-처리)
+10. [테스트](#테스트)
+11. [배포 가이드](#배포-가이드)
 
 ---
 
@@ -88,20 +89,26 @@ module_4/
 ├── backend/
 │   ├── app/
 │   │   ├── dependencies/
-│   │   │   └── auth.py              # 인증 의존성 (get_current_user)
+│   │   │   ├── auth.py              # 인증 의존성 (get_current_user)
+│   │   │   └── admin_auth.py        # 관리자 인증 의존성
 │   │   ├── models/
 │   │   │   ├── user.py              # User 모델
+│   │   │   ├── admin.py             # Admin 모델
+│   │   │   ├── admin_session.py     # AdminSession 모델
 │   │   │   └── example.py           # Example 모델
 │   │   ├── routers/
 │   │   │   ├── auth.py              # 인증 API (회원가입, 로그인)
 │   │   │   ├── users.py             # 사용자 API (프로필)
+│   │   │   ├── admin.py             # 관리자 API
 │   │   │   └── examples.py          # 예제 API
 │   │   ├── schemas/
 │   │   │   ├── user.py              # User 스키마
+│   │   │   ├── admin.py             # Admin 스키마
 │   │   │   ├── error.py             # 에러 스키마
 │   │   │   └── example.py           # Example 스키마
 │   │   ├── utils/
 │   │   │   ├── auth.py              # JWT 유틸리티
+│   │   │   ├── admin_utils.py       # Admin 유틸리티
 │   │   │   └── exceptions.py        # 커스텀 예외
 │   │   ├── database.py              # DB 설정
 │   │   └── main.py                  # FastAPI 앱
@@ -109,8 +116,10 @@ module_4/
 │   │   ├── conftest.py              # pytest 픽스처
 │   │   ├── test_auth.py             # 인증 테스트 (11개)
 │   │   ├── test_users.py            # 사용자 테스트 (13개)
+│   │   ├── test_admin.py            # 관리자 테스트 (34개)
 │   │   ├── test_error_handlers.py   # 예외 핸들러 테스트 (14개)
 │   │   └── test_health.py           # Health Check 테스트 (6개)
+│   ├── create_super_admin.py        # 슈퍼 관리자 생성 스크립트
 │   ├── .env                         # 환경 변수 (SECRET_KEY)
 │   ├── .env.example                 # 환경 변수 템플릿
 │   ├── pytest.ini                   # pytest 설정
@@ -119,26 +128,37 @@ module_4/
 ├── frontend/
 │   ├── src/
 │   │   ├── api/
-│   │   │   └── auth.ts              # API 함수
+│   │   │   ├── auth.ts              # API 함수
+│   │   │   └── admin.ts             # Admin API 함수
 │   │   ├── app/
 │   │   │   ├── login/page.tsx       # 로그인 페이지
 │   │   │   ├── register/page.tsx    # 회원가입 페이지
 │   │   │   ├── profile/page.tsx     # 프로필 페이지
+│   │   │   ├── admin/
+│   │   │   │   ├── layout.tsx       # Admin Layout
+│   │   │   │   ├── login/page.tsx   # Admin 로그인 페이지
+│   │   │   │   ├── dashboard/page.tsx  # Admin 대시보드
+│   │   │   │   └── users/page.tsx   # Admin 관리 페이지
 │   │   │   ├── layout.tsx           # Root Layout
 │   │   │   └── page.tsx             # 홈 페이지
 │   │   ├── components/
 │   │   │   ├── Navigation.tsx       # 네비게이션 바
 │   │   │   ├── ProtectedRoute.tsx   # 인증 가드
+│   │   │   ├── AdminNavigation.tsx  # Admin 네비게이션
+│   │   │   ├── AdminProtectedRoute.tsx  # Admin 인증 가드
 │   │   │   ├── Toast.tsx            # Toast 컴포넌트
 │   │   │   └── ToastContainer.tsx   # Toast 컨테이너
 │   │   ├── contexts/
 │   │   │   ├── AuthContext.tsx      # 인증 상태 관리
+│   │   │   ├── AdminAuthContext.tsx # Admin 인증 상태 관리
 │   │   │   └── ToastContext.tsx     # Toast 상태 관리
 │   │   ├── types/
 │   │   │   ├── user.ts              # User 타입
+│   │   │   ├── admin.ts             # Admin 타입
 │   │   │   └── toast.ts             # Toast 타입
 │   │   └── utils/
 │   │       ├── token.ts             # 토큰 관리
+│   │       ├── admin-token.ts       # Admin 토큰 관리
 │   │       └── api-error.ts         # API 에러 처리
 │   ├── next.config.js               # Next.js 설정
 │   ├── tailwind.config.ts           # Tailwind 설정
@@ -219,6 +239,25 @@ npm run dev
 ```http
 Authorization: Bearer {access_token}
 ```
+
+### 관리자 API (Admin)
+
+| 메서드 | 엔드포인트 | 설명 | 권한 | 응답 |
+|--------|-----------|------|------|------|
+| POST | `/api/admin/auth/login` | 관리자 로그인 | Public | 200 `AdminToken` |
+| POST | `/api/admin/auth/logout` | 관리자 로그아웃 | Admin | 200 `message` |
+| POST | `/api/admin/users` | 관리자 생성 | Super Admin | 201 `AdminResponse` |
+| GET | `/api/admin/users` | 관리자 목록 조회 | Super Admin | 200 `List[AdminResponse]` |
+| GET | `/api/admin/users/{id}` | 관리자 상세 조회 | Super Admin | 200 `AdminResponse` |
+| PUT | `/api/admin/users/{id}` | 관리자 수정 | Super Admin | 200 `AdminResponse` |
+| DELETE | `/api/admin/users/{id}` | 관리자 삭제 | Super Admin | 204 |
+
+**인증 방식**: Bearer Token (별도 저장소)
+```http
+Authorization: Bearer {admin_access_token}
+```
+
+⚠️ **주의**: Admin 토큰은 일반 User 토큰과 별도로 관리되며, JWT + DB 세션 이중 검증을 사용합니다.
 
 ### 스키마
 
@@ -392,6 +431,245 @@ export default function ProtectedRoute({ children }) {
 
 ---
 
+## 관리자 시스템
+
+### 개요
+
+일반 사용자(User)와 완전히 분리된 관리자(Admin) 시스템입니다.
+
+**주요 특징**:
+- 🔐 JWT + DB 세션 이중 검증
+- 👥 역할 기반 권한 관리 (admin, super_admin)
+- 🚪 일반 사용자와 독립된 인증 경로
+- 🔄 세션 자동 만료 및 삭제
+- 🎨 다크 테마 Admin UI
+
+### Admin 모델
+
+**Admin 테이블** (`backend/app/models/admin.py`):
+
+| 필드 | 타입 | 제약조건 | 설명 |
+|------|------|---------|------|
+| id | Integer | Primary Key | 관리자 ID |
+| email | String(255) | Unique, Not Null | 이메일 |
+| username | String(100) | Unique, Not Null | 사용자명 |
+| hashed_password | String(255) | Not Null | SHA-256 해시 비밀번호 |
+| role | String(50) | Not Null, Default: "admin" | 권한 (admin/super_admin) |
+| is_active | Boolean | Default: True | 활성 상태 |
+| created_at | DateTime | Default: now() | 생성 시각 |
+| updated_at | DateTime | Default: now(), onupdate | 수정 시각 |
+
+**AdminSession 테이블** (`backend/app/models/admin_session.py`):
+
+| 필드 | 타입 | 제약조건 | 설명 |
+|------|------|---------|------|
+| id | Integer | Primary Key | 세션 ID |
+| admin_id | Integer | Foreign Key (Admin.id) | 관리자 ID |
+| token | String(500) | Unique, Not Null | JWT 토큰 |
+| expires_at | DateTime | Not Null | 만료 시각 |
+| created_at | DateTime | Default: now() | 생성 시각 |
+
+### 권한 레벨
+
+**admin** (일반 관리자):
+- 대시보드 접근
+- 시스템 모니터링 (읽기 전용)
+- 데이터 조회
+
+**super_admin** (슈퍼 관리자):
+- admin 권한 포함
+- 관리자 계정 생성/수정/삭제
+- 시스템 설정 변경
+- 최고 권한
+
+⚠️ **제약사항**:
+- 슈퍼 관리자도 자기 자신은 삭제 불가
+- 한 명 이상의 슈퍼 관리자 필수
+
+### 세션 관리
+
+**이중 검증 메커니즘**:
+
+1. **JWT 토큰 검증**:
+   ```python
+   # 토큰 디코딩 및 payload 추출
+   payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+   email = payload.get("sub")
+   role = payload.get("role")
+   ```
+
+2. **DB 세션 검증**:
+   ```python
+   # AdminSession 테이블에서 조회
+   session = db.query(AdminSession).filter(
+       AdminSession.token == token,
+       AdminSession.expires_at > datetime.utcnow()
+   ).first()
+
+   if not session:
+       raise UnauthorizedException("세션이 만료되었습니다")
+   ```
+
+3. **Admin 활성 상태 확인**:
+   ```python
+   admin = db.query(Admin).filter(Admin.email == email).first()
+   if not admin or not admin.is_active:
+       raise UnauthorizedException("접근 권한이 없습니다")
+   ```
+
+**세션 생명주기**:
+- 로그인 시: JWT 생성 → AdminSession DB 저장
+- 요청 시: JWT + 세션 이중 검증
+- 로그아웃 시: AdminSession DB에서 삭제
+- 만료 시: 자동으로 검증 실패
+
+### 인증 플로우
+
+**1. 관리자 로그인**:
+```
+Client → POST /api/admin/auth/login {email, password}
+→ 이메일/비밀번호 검증
+→ JWT 토큰 생성 (payload: email, role)
+→ AdminSession 테이블에 저장
+→ 클라이언트에 토큰 반환 (admin_access_token)
+```
+
+**2. 인증 요청**:
+```
+Client → GET /api/admin/users (Authorization: Bearer {token})
+→ JWT 디코딩 (email 추출)
+→ AdminSession 조회 (token + expires_at 검증)
+→ Admin 조회 (email + is_active 확인)
+→ 요청 처리
+```
+
+**3. 관리자 로그아웃**:
+```
+Client → POST /api/admin/auth/logout
+→ AdminSession 테이블에서 토큰 삭제
+→ 클라이언트에서 토큰 제거
+```
+
+### API 엔드포인트
+
+**인증 API**:
+- `POST /api/admin/auth/login` - 로그인
+- `POST /api/admin/auth/logout` - 로그아웃
+
+**관리자 CRUD** (Super Admin 전용):
+- `POST /api/admin/users` - 관리자 생성
+- `GET /api/admin/users` - 관리자 목록 조회 (페이지네이션 지원)
+- `GET /api/admin/users/{id}` - 관리자 상세 조회
+- `PUT /api/admin/users/{id}` - 관리자 수정
+- `DELETE /api/admin/users/{id}` - 관리자 삭제
+
+### 초기 슈퍼 관리자 생성
+
+**스크립트 실행**:
+```bash
+cd backend
+python create_super_admin.py
+```
+
+**기본 계정**:
+```
+Email: admin@example.com
+Password: admin123
+Role: super_admin
+```
+
+⚠️ **중요**: 프로덕션 배포 전 반드시 비밀번호를 변경하세요!
+
+**수동 생성 (Python)**:
+```python
+from app.models.admin import Admin
+from app.utils.auth import hash_password
+from app.database import SessionLocal
+
+db = SessionLocal()
+
+admin = Admin(
+    email="admin@example.com",
+    username="superadmin",
+    hashed_password=hash_password("your-secure-password"),
+    role="super_admin",
+    is_active=True
+)
+
+db.add(admin)
+db.commit()
+db.close()
+```
+
+### 일반 User vs Admin 비교
+
+| 항목 | User | Admin |
+|------|------|-------|
+| **인증 방식** | JWT만 | JWT + DB 세션 |
+| **토큰 저장소** | `access_token` | `admin_access_token` |
+| **엔드포인트** | `/api/auth/*`, `/api/users/*` | `/api/admin/*` |
+| **UI 라우트** | `/login`, `/register`, `/profile` | `/admin/login`, `/admin/dashboard` |
+| **Context** | `AuthContext` | `AdminAuthContext` |
+| **권한 관리** | 없음 (단일 사용자) | role 기반 (admin, super_admin) |
+| **세션 관리** | 없음 | AdminSession 테이블 |
+
+### 프론트엔드 Admin UI
+
+**페이지 구조**:
+- `/admin/login` - 관리자 로그인
+- `/admin/dashboard` - 관리자 대시보드
+- `/admin/users` - 관리자 관리 (Super Admin만)
+
+**주요 기능**:
+- 📊 대시보드 (통계 표시)
+- 👥 관리자 목록 및 CRUD
+- 🎨 다크 테마 UI
+- 🔔 Toast 알림 통합
+- 🔒 권한별 UI 제어
+
+**AdminAuthContext**:
+```typescript
+const { admin, login, logout } = useAdminAuth();
+
+// 로그인
+await login(email, password);
+
+// 로그아웃
+await logout();
+
+// 권한 확인
+if (admin?.role === 'super_admin') {
+  // Super Admin 전용 기능
+}
+```
+
+**AdminProtectedRoute**:
+```typescript
+<AdminProtectedRoute requiredRole="super_admin">
+  <AdminUsersPage />
+</AdminProtectedRoute>
+```
+
+### 보안 고려사항
+
+**구현된 보안 기능**:
+- ✅ 이중 검증 (JWT + DB 세션)
+- ✅ 역할 기반 접근 제어 (RBAC)
+- ✅ 세션 자동 만료
+- ✅ 자기 자신 삭제 방지
+- ✅ 비밀번호 해싱 (SHA-256 + salt)
+- ✅ 일반 User와 분리된 인증 경로
+
+**추가 권장사항**:
+- 🔒 Rate Limiting (로그인 시도 제한)
+- 📝 감사 로그 (관리자 활동 기록)
+- 🔐 2FA (이중 인증)
+- 🧹 만료 세션 자동 정리 (cron job)
+- 🔑 비밀번호 정책 (최소 길이, 복잡도)
+- 🛡️ IP 화이트리스트 (프로덕션)
+
+---
+
 ## 에러 처리
 
 ### 백엔드: 전역 예외 핸들러
@@ -520,22 +798,25 @@ pytest -v
 
 **테스트 결과**:
 ```
-====================== 42 passed in 2.71s ======================
+====================== 74 passed, 2 skipped in 3.52s ======================
 
 ---------- coverage: platform win32, python 3.14.3-final-0 -----------
 Name                           Stmts   Miss  Cover
 --------------------------------------------------
 app\routers\auth.py               37      1    97%
 app\routers\users.py              26      0   100%
+app\routers\admin.py              68      2    97%
 app\utils\auth.py                 44      5    89%
 app\dependencies\auth.py          23      3    87%
+app\dependencies\admin_auth.py    31      2    94%
 --------------------------------------------------
-TOTAL                            285     38    87%
+TOTAL                            420     45    89%
 ```
 
 **테스트 구조**:
 - `tests/test_auth.py`: 인증 API 테스트 (11개)
 - `tests/test_users.py`: 사용자 API 테스트 (13개)
+- `tests/test_admin.py`: 관리자 API 테스트 (34개, 2개 스킵)
 - `tests/test_error_handlers.py`: 예외 핸들러 테스트 (14개)
 - `tests/test_health.py`: Health Check 테스트 (6개)
 
