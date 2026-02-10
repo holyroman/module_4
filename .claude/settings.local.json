@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh:*)",
+      "Bash(git:*)",
+      "Bash(dir:*)",
+      "Bash(if not exist \".claude\\\\docs\" mkdir .claudedocs)",
+      "Bash(findstr:*)"
+    ]
+  }
+}
