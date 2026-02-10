@@ -2,15 +2,16 @@
 
 import { useState, FormEvent, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
+import { getErrorMessage } from '@/utils/api-error';
 import ProtectedRoute from '@/components/ProtectedRoute';
 
 function ProfileContent() {
   const { user, updateUser } = useAuth();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const { success, error: showError } = useToast();
 
   useEffect(() => {
     if (user) {
@@ -21,15 +22,13 @@ function ProfileContent() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
     setLoading(true);
 
     try {
       await updateUser({ username, email });
-      setSuccess('프로필이 성공적으로 수정되었습니다.');
+      success('프로필이 성공적으로 수정되었습니다.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : '프로필 수정에 실패했습니다.');
+      showError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -74,18 +73,6 @@ function ProfileContent() {
               </div>
             </div>
           </div>
-
-          {error && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
-              {error}
-            </div>
-          )}
-
-          {success && (
-            <div className="mb-4 p-4 bg-green-50 border border-green-200 text-green-700 rounded-lg">
-              {success}
-            </div>
-          )}
 
           {/* 프로필 수정 폼 */}
           <form onSubmit={handleSubmit} className="space-y-4">

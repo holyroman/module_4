@@ -5,6 +5,7 @@ from app.database import get_db
 from app.models import User
 from app.schemas import UserResponse, UserUpdate
 from app.dependencies.auth import get_current_active_user
+from app.utils.exceptions import BadRequestException
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -29,10 +30,7 @@ def update_current_user_profile(
             User.id != current_user.id
         ).first()
         if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="이미 사용 중인 사용자명입니다"
-            )
+            raise BadRequestException("이미 사용 중인 사용자명입니다")
         current_user.username = user_update.username
 
     # email 변경 시 중복 체크
@@ -42,10 +40,7 @@ def update_current_user_profile(
             User.id != current_user.id
         ).first()
         if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="이미 등록된 이메일입니다"
-            )
+            raise BadRequestException("이미 등록된 이메일입니다")
         current_user.email = user_update.email
 
     db.commit()

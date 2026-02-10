@@ -4,29 +4,30 @@ import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
+import { getErrorMessage } from '@/utils/api-error';
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
+  const { success, error: showError, warning } = useToast();
   const router = useRouter();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setError('');
 
     // 클라이언트 검증
     if (password.length < 8) {
-      setError('비밀번호는 8자 이상이어야 합니다.');
+      warning('비밀번호는 8자 이상이어야 합니다.');
       return;
     }
 
     if (password !== confirmPassword) {
-      setError('비밀번호가 일치하지 않습니다.');
+      warning('비밀번호가 일치하지 않습니다.');
       return;
     }
 
@@ -34,9 +35,10 @@ export default function RegisterPage() {
 
     try {
       await register({ email, username, password });
+      success('회원가입 성공! 환영합니다.');
       router.push('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : '회원가입에 실패했습니다.');
+      showError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -51,12 +53,6 @@ export default function RegisterPage() {
         <p className="text-gray-600 text-center mb-8">
           새 계정을 만드세요
         </p>
-
-        {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
-            {error}
-          </div>
-        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

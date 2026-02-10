@@ -1,603 +1,685 @@
-# 개발 내역 - Login 인증 시스템
+# 개발 문서 (Development Guide)
 
-> 작성일: 2026-02-10
->
-> 기반 문서: `.claude/docs/login_todo.md`, `.claude/plans/enchanted-crafting-toucan.md`
-
-## 개요
-
-JWT 기반 인증 시스템을 구현하여 사용자 회원가입, 로그인, 프로필 관리 기능을 추가했습니다.
-
-- **백엔드**: FastAPI + SQLAlchemy + JWT (bcrypt, python-jose)
-- **프론트엔드**: Next.js 14 + TypeScript + Tailwind CSS + Context API
+> 최종 업데이트: 2026-02-10
+> 버전: 1.0.0
 
 ---
 
-## Phase 1: 백엔드 구현
+## 📋 목차
 
-### 1.1 의존성 추가
-
-**파일**: `backend/requirements.txt`
-
-추가된 패키지:
-```txt
-passlib[bcrypt]==1.7.4
-python-jose[cryptography]==3.3.0
-python-multipart==0.0.6
-```
-
-설치 명령어:
-```bash
-cd backend
-.venv\Scripts\activate
-uv pip install passlib[bcrypt]==1.7.4 python-jose[cryptography]==3.3.0 python-multipart==0.0.6
-```
+1. [프로젝트 개요](#프로젝트-개요)
+2. [기술 스택](#기술-스택)
+3. [주요 기능](#주요-기능)
+4. [프로젝트 구조](#프로젝트-구조)
+5. [설치 및 실행](#설치-및-실행)
+6. [API 문서](#api-문서)
+7. [인증 시스템](#인증-시스템)
+8. [에러 처리](#에러-처리)
+9. [테스트](#테스트)
+10. [배포 가이드](#배포-가이드)
 
 ---
 
-### 1.2 환경변수 설정
+## 프로젝트 개요
 
-**파일**: `backend/.env` (신규)
+JWT 기반 인증 시스템을 갖춘 풀스택 웹 애플리케이션입니다.
 
-```env
-SECRET_KEY=your-secret-key-here-change-in-production-min-32-chars
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-```
-
-**주의**: SECRET_KEY는 프로덕션 환경에서 반드시 강력한 랜덤 문자열로 변경 필요
-
----
-
-### 1.3 데이터베이스 모델
-
-#### User 모델
-**파일**: `backend/app/models/user.py`
-
-```python
-class User(Base):
-    __tablename__ = "users"
-
-    id: Integer (Primary Key)
-    email: String(255) (Unique, Index)
-    username: String(100) (Unique)
-    hashed_password: String(255)
-    is_active: Boolean (default=True)
-    created_at: DateTime (자동 생성)
-    updated_at: DateTime (자동 업데이트)
-```
-
-**패턴**: `models/example.py` 참고
+**주요 특징**:
+- 🔐 JWT 기반 인증/인가
+- 🎨 Toast 알림 시스템
+- ⚠️ 전역 예외 처리
+- 🧪 자동화된 테스트 (87% 커버리지)
+- 📦 프로덕션 준비 완료
 
 ---
 
-### 1.4 Pydantic 스키마
+## 기술 스택
 
-**파일**: `backend/app/schemas/user.py`
+### 백엔드
+- **프레임워크**: FastAPI 0.109.0
+- **ORM**: SQLAlchemy 2.0+
+- **데이터베이스**: SQLite (개발), PostgreSQL (프로덕션 권장)
+- **인증**: JWT (python-jose)
+- **비밀번호 해싱**: SHA-256 + salt
+- **테스트**: pytest (42개 테스트, 87% 커버리지)
 
-구현된 스키마:
-- `UserCreate`: 회원가입 요청 (email, username, password)
-- `UserLogin`: 로그인 요청 (email, password)
-- `UserResponse`: 사용자 정보 응답 (id, email, username, is_active, created_at)
-- `Token`: JWT 토큰 응답 (access_token, token_type)
-- `TokenData`: 토큰 페이로드 (email)
-- `UserUpdate`: 프로필 수정 요청 (username, email - optional)
-
-**패턴**: `schemas/example.py` 참고
-
----
-
-### 1.5 인증 유틸리티
-
-**파일**: `backend/app/utils/auth.py`
-
-구현된 함수:
-1. **`hash_password(password: str) -> str`**
-   - bcrypt를 사용한 비밀번호 해싱
-
-2. **`verify_password(plain_password: str, hashed_password: str) -> bool`**
-   - 비밀번호 검증
-
-3. **`create_access_token(data: dict, expires_delta: timedelta | None = None) -> str`**
-   - JWT 토큰 생성
-   - .env에서 SECRET_KEY, ALGORITHM 로드
-   - 기본 만료 시간: 30분
-
-4. **`decode_access_token(token: str) -> TokenData`**
-   - JWT 디코딩 및 검증
-   - 만료/유효성 체크
-
-**라이브러리**:
-- `passlib.context.CryptContext`
-- `jose.jwt`, `jose.JWTError`
+### 프론트엔드
+- **프레임워크**: Next.js 14 (App Router)
+- **언어**: TypeScript
+- **스타일링**: Tailwind CSS
+- **상태 관리**: React Context API
+- **알림**: 커스텀 Toast 시스템
 
 ---
 
-### 1.6 인증 의존성
-
-**파일**: `backend/app/dependencies/auth.py`
-
-구현된 의존성:
-1. **`oauth2_scheme`**: OAuth2PasswordBearer
-
-2. **`get_current_user(token, db) -> User`**
-   - 토큰에서 사용자 정보 추출
-   - DB 조회 후 User 객체 반환
-   - 에러: 401 Unauthorized
-
-3. **`get_current_active_user(current_user) -> User`**
-   - is_active 체크
-   - 에러: 403 Forbidden
-
----
-
-### 1.7 API 엔드포인트
-
-#### 인증 라우터
-**파일**: `backend/app/routers/auth.py`
-
-| 메서드 | 엔드포인트 | 설명 | 인증 필요 |
-|--------|-----------|------|----------|
-| POST | `/api/auth/register` | 회원가입 | ❌ |
-| POST | `/api/auth/login` | 로그인 | ❌ |
-| POST | `/api/auth/logout` | 로그아웃 (stateless) | ❌ |
-
-**회원가입 로직**:
-- 이메일 중복 체크 → 400 Bad Request
-- 사용자명 중복 체크 → 400 Bad Request
-- 비밀번호 해싱
-- User 생성 및 저장
-- UserResponse 반환 (201 Created)
-
-**로그인 로직**:
-- 이메일로 사용자 조회 → 401 Unauthorized
-- 비밀번호 검증 → 401 Unauthorized
-- is_active 체크 → 403 Forbidden
-- JWT 생성 (subject=email)
-- Token 반환
-
----
-
-#### 사용자 라우터
-**파일**: `backend/app/routers/users.py`
-
-| 메서드 | 엔드포인트 | 설명 | 인증 필요 |
-|--------|-----------|------|----------|
-| GET | `/api/users/me` | 프로필 조회 | ✅ |
-| PUT | `/api/users/me` | 프로필 수정 | ✅ |
-
-**프로필 수정 로직**:
-- username 변경 시 중복 체크 → 400 Bad Request
-- email 변경 시 중복 체크 → 400 Bad Request
-- 필드 업데이트
-- UserResponse 반환
-
----
-
-### 1.8 라우터 등록
-
-**파일**: `backend/app/main.py`
-
-```python
-from app.routers import examples, auth, users
-
-app.include_router(examples.router)
-app.include_router(auth.router)
-app.include_router(users.router)
-```
-
----
-
-### 1.9 데이터베이스 마이그레이션
-
-**초기화 명령어**:
-```bash
-cd backend
-del app.db  # 기존 DB 삭제 (개발 환경)
-uvicorn app.main:app --reload  # 서버 시작 시 자동 생성
-```
-
-User 모델이 `models/__init__.py`에 등록되어 있으므로 `Base.metadata.create_all(bind=engine)`에 의해 자동으로 users 테이블이 생성됩니다.
-
----
-
-## Phase 2: 프론트엔드 구현
-
-### 2.1 타입 정의
-
-**파일**: `frontend/src/types/user.ts`
-
-```typescript
-interface User {
-  id: number;
-  email: string;
-  username: string;
-  is_active: boolean;
-  created_at: string;
-}
-
-interface UserCreate { email, username, password }
-interface UserLogin { email, password }
-interface Token { access_token, token_type }
-interface UserUpdate { username?, email? }
-```
-
----
-
-### 2.2 토큰 관리
-
-**파일**: `frontend/src/utils/token.ts`
-
-localStorage를 사용한 JWT 토큰 관리:
-- `setToken(token: string): void`
-- `getToken(): string | null`
-- `removeToken(): void`
-
----
-
-### 2.3 API 함수
-
-**파일**: `frontend/src/api/auth.ts`
-
-구현된 API 함수:
-- `register(data: UserCreate): Promise<User>` → POST /api/auth/register
-- `login(data: UserLogin): Promise<Token>` → POST /api/auth/login
-- `getCurrentUser(token: string): Promise<User>` → GET /api/users/me
-- `updateProfile(token: string, data: UserUpdate): Promise<User>` → PUT /api/users/me
-- `logout(): void` → 토큰 삭제
-
-**패턴**: `app/page.tsx`의 fetch 패턴 재사용
-
----
-
-### 2.4 전역 인증 상태 관리
-
-**파일**: `frontend/src/contexts/AuthContext.tsx`
-
-**AuthContext**:
-```typescript
-{
-  user: User | null;
-  isAuthenticated: boolean;
-  loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
-  register: (data: UserCreate) => Promise<void>;
-  updateUser: (data: UserUpdate) => Promise<void>;
-}
-```
-
-**AuthProvider**:
-- 컴포넌트 마운트 시 토큰 확인 → 사용자 정보 자동 로드
-- login: API 호출 → 토큰 저장 → 사용자 정보 조회
-- logout: 토큰 삭제 → 상태 초기화
-- register: API 호출 → 자동 로그인
-
-**useAuth 훅**: Context 값 반환
-
----
-
-### 2.5 컴포넌트
-
-#### ProtectedRoute
-**파일**: `frontend/src/components/ProtectedRoute.tsx`
-
-로직:
-- loading 중: 로딩 표시
-- 비인증: 로그인 페이지로 리다이렉트
-- 인증: children 렌더링
-
-사용 예:
-```tsx
-<ProtectedRoute>
-  <ProfilePage />
-</ProtectedRoute>
-```
-
----
-
-#### Navigation
-**파일**: `frontend/src/components/Navigation.tsx`
-
-기능:
-- **비로그인 상태**: 로그인, 회원가입 링크 표시
-- **로그인 상태**: 사용자명, 프로필, 로그아웃 버튼 표시
-- Tailwind CSS로 스타일링
-
----
-
-### 2.6 페이지
-
-#### 로그인 페이지
-**파일**: `frontend/src/app/login/page.tsx`
-
-UI:
-- 이메일 입력 (type="email", required)
-- 비밀번호 입력 (type="password", required)
-- 로그인 버튼
-- 회원가입 링크
-- 에러 메시지 표시 영역
-
-로직:
-- useAuth 훅으로 login 함수 가져오기
-- 제출 시 login() 호출
-- 성공 시 "/" 리다이렉트
-- 실패 시 에러 메시지 표시
-
----
-
-#### 회원가입 페이지
-**파일**: `frontend/src/app/register/page.tsx`
-
-UI:
-- 이메일 입력
-- 사용자명 입력
-- 비밀번호 입력
-- 비밀번호 확인 입력
-- 회원가입 버튼
-- 로그인 링크
-
-클라이언트 검증:
-- 비밀번호 최소 8자
-- 비밀번호 확인 일치
-
-로직:
-- useAuth 훅으로 register 함수 가져오기
-- 제출 시 register() 호출
-- 성공 시 자동 로그인 및 홈으로 리다이렉트
-
----
-
-#### 프로필 페이지
-**파일**: `frontend/src/app/profile/page.tsx`
-
-UI:
-- 사용자 정보 표시 (이메일, 사용자명, 가입일)
-- 수정 폼 (username, email)
-- 수정 버튼
-- 성공 메시지 표시
-
-보호:
-- ProtectedRoute로 감싸기
-- 비인증 사용자는 로그인 페이지로 리다이렉트
-
----
-
-### 2.7 Layout 업데이트
-
-**파일**: `frontend/src/app/layout.tsx`
-
-변경사항:
-```tsx
-import { AuthProvider } from '@/contexts/AuthContext';
-import Navigation from '@/components/Navigation';
-
-export default function RootLayout({ children }) {
-  return (
-    <html lang="ko">
-      <body>
-        <AuthProvider>
-          <Navigation />
-          {children}
-        </AuthProvider>
-      </body>
-    </html>
-  );
-}
-```
-
----
-
-### 2.8 홈 페이지 업데이트
-
-**파일**: `frontend/src/app/page.tsx`
-
-변경사항:
-- useAuth 훅으로 user, isAuthenticated 가져오기
-- 로그인 상태 표시
-- 로그인 사용자에게 환영 메시지
-- 프로필 페이지 링크
+## 주요 기능
+
+### 1. 인증 시스템
+- ✅ 회원가입 (이메일, 사용자명, 비밀번호)
+- ✅ 로그인 (JWT 토큰 발급)
+- ✅ 로그아웃 (클라이언트 토큰 삭제)
+- ✅ 프로필 조회 및 수정
+- ✅ Protected Route (인증 필요 페이지)
+
+### 2. 보안
+- 🔒 SHA-256 + salt 비밀번호 해싱
+- 🔑 환경 변수 기반 SECRET_KEY 관리
+- 🛡️ JWT 토큰 만료 (기본 30분)
+- 🚫 CORS 설정 (localhost:3000 허용)
+
+### 3. 사용자 경험
+- 🎨 Toast 알림 (성공/에러/정보/경고)
+- 🎭 자동 사라지는 알림 (3초)
+- 🌊 슬라이드 인 애니메이션
+- ⚡ 일관된 에러 메시지
+
+### 4. 개발자 경험
+- 🧪 자동화된 테스트 (pytest)
+- 📊 코드 커버리지 87%
+- 🔍 전역 예외 핸들러
+- 📖 Swagger UI 문서
 
 ---
 
 ## 프로젝트 구조
 
-### 백엔드
 ```
-backend/app/
-├── dependencies/
-│   ├── __init__.py
-│   └── auth.py (인증 의존성)
-├── models/
-│   ├── __init__.py
-│   ├── example.py
-│   └── user.py (User 모델)
-├── routers/
-│   ├── __init__.py
-│   ├── examples.py
-│   ├── auth.py (인증 API)
-│   └── users.py (사용자 API)
-├── schemas/
-│   ├── __init__.py
-│   ├── example.py
-│   └── user.py (User 스키마)
-├── utils/
-│   ├── __init__.py
-│   └── auth.py (인증 유틸리티)
-├── database.py
-└── main.py
-```
-
-### 프론트엔드
-```
-frontend/src/
-├── api/
-│   └── auth.ts (API 함수)
-├── app/
-│   ├── login/
-│   │   └── page.tsx
-│   ├── register/
-│   │   └── page.tsx
-│   ├── profile/
-│   │   └── page.tsx
-│   ├── layout.tsx (AuthProvider, Navigation)
-│   └── page.tsx (홈 페이지)
-├── components/
-│   ├── Navigation.tsx
-│   └── ProtectedRoute.tsx
-├── contexts/
-│   └── AuthContext.tsx (전역 상태 관리)
-├── types/
-│   └── user.ts (타입 정의)
-└── utils/
-    └── token.ts (토큰 관리)
+module_4/
+├── backend/
+│   ├── app/
+│   │   ├── dependencies/
+│   │   │   └── auth.py              # 인증 의존성 (get_current_user)
+│   │   ├── models/
+│   │   │   ├── user.py              # User 모델
+│   │   │   └── example.py           # Example 모델
+│   │   ├── routers/
+│   │   │   ├── auth.py              # 인증 API (회원가입, 로그인)
+│   │   │   ├── users.py             # 사용자 API (프로필)
+│   │   │   └── examples.py          # 예제 API
+│   │   ├── schemas/
+│   │   │   ├── user.py              # User 스키마
+│   │   │   ├── error.py             # 에러 스키마
+│   │   │   └── example.py           # Example 스키마
+│   │   ├── utils/
+│   │   │   ├── auth.py              # JWT 유틸리티
+│   │   │   └── exceptions.py        # 커스텀 예외
+│   │   ├── database.py              # DB 설정
+│   │   └── main.py                  # FastAPI 앱
+│   ├── tests/
+│   │   ├── conftest.py              # pytest 픽스처
+│   │   ├── test_auth.py             # 인증 테스트 (11개)
+│   │   ├── test_users.py            # 사용자 테스트 (13개)
+│   │   ├── test_error_handlers.py   # 예외 핸들러 테스트 (14개)
+│   │   └── test_health.py           # Health Check 테스트 (6개)
+│   ├── .env                         # 환경 변수 (SECRET_KEY)
+│   ├── .env.example                 # 환경 변수 템플릿
+│   ├── pytest.ini                   # pytest 설정
+│   └── requirements.txt             # Python 의존성
+│
+├── frontend/
+│   ├── src/
+│   │   ├── api/
+│   │   │   └── auth.ts              # API 함수
+│   │   ├── app/
+│   │   │   ├── login/page.tsx       # 로그인 페이지
+│   │   │   ├── register/page.tsx    # 회원가입 페이지
+│   │   │   ├── profile/page.tsx     # 프로필 페이지
+│   │   │   ├── layout.tsx           # Root Layout
+│   │   │   └── page.tsx             # 홈 페이지
+│   │   ├── components/
+│   │   │   ├── Navigation.tsx       # 네비게이션 바
+│   │   │   ├── ProtectedRoute.tsx   # 인증 가드
+│   │   │   ├── Toast.tsx            # Toast 컴포넌트
+│   │   │   └── ToastContainer.tsx   # Toast 컨테이너
+│   │   ├── contexts/
+│   │   │   ├── AuthContext.tsx      # 인증 상태 관리
+│   │   │   └── ToastContext.tsx     # Toast 상태 관리
+│   │   ├── types/
+│   │   │   ├── user.ts              # User 타입
+│   │   │   └── toast.ts             # Toast 타입
+│   │   └── utils/
+│   │       ├── token.ts             # 토큰 관리
+│   │       └── api-error.ts         # API 에러 처리
+│   ├── next.config.js               # Next.js 설정
+│   ├── tailwind.config.ts           # Tailwind 설정
+│   └── package.json                 # npm 의존성
+│
+└── .claude/
+    └── docs/
+        ├── dev.md                   # 개발 문서 (본 문서)
+        ├── test.md                  # 테스트 문서
+        └── progress.md              # 작업 이력
 ```
 
 ---
 
-## API 엔드포인트 요약
+## 설치 및 실행
 
-### 인증 API (Public)
-
-| 메서드 | 엔드포인트 | 요청 Body | 응답 | 설명 |
-|--------|-----------|----------|------|------|
-| POST | `/api/auth/register` | UserCreate | UserResponse (201) | 회원가입 |
-| POST | `/api/auth/login` | UserLogin | Token | 로그인 |
-| POST | `/api/auth/logout` | - | message | 로그아웃 |
-
-### 사용자 API (Protected)
-
-| 메서드 | 엔드포인트 | 요청 Body | 응답 | 설명 |
-|--------|-----------|----------|------|------|
-| GET | `/api/users/me` | - | UserResponse | 프로필 조회 |
-| PUT | `/api/users/me` | UserUpdate | UserResponse | 프로필 수정 |
-
-**인증 방식**: Bearer Token (Authorization: Bearer {access_token})
-
----
-
-## 실행 방법
+### 사전 요구사항
+- Python 3.12+
+- Node.js 18+
+- npm 또는 yarn
 
 ### 백엔드 실행
 
 ```bash
+# 1. 가상환경 생성 및 활성화
 cd backend
-.venv\Scripts\activate
-uvicorn app.main:app --reload
-```
+python -m venv .venv
+.venv\Scripts\activate  # Windows
+source .venv/bin/activate  # Mac/Linux
 
-- **주소**: http://localhost:8000
-- **API 문서**: http://localhost:8000/docs
+# 2. 의존성 설치
+pip install -r requirements.txt
+
+# 3. 환경 변수 설정 (선택사항)
+cp .env.example .env
+# .env 파일에서 SECRET_KEY 수정 (프로덕션 필수)
+
+# 4. 서버 실행
+uvicorn app.main:app --reload
+
+# 서버 주소: http://localhost:8000
+# API 문서: http://localhost:8000/docs
+```
 
 ### 프론트엔드 실행
 
 ```bash
+# 1. 의존성 설치
 cd frontend
+npm install
+
+# 2. 개발 서버 실행
 npm run dev
+
+# 서버 주소: http://localhost:3000
 ```
 
-- **주소**: http://localhost:3000
+---
+
+## API 문서
+
+### 인증 API (Public)
+
+| 메서드 | 엔드포인트 | 설명 | 요청 Body | 응답 |
+|--------|-----------|------|----------|------|
+| POST | `/api/auth/register` | 회원가입 | `UserCreate` | 201 `UserResponse` |
+| POST | `/api/auth/login` | 로그인 | `UserLogin` | 200 `Token` |
+| POST | `/api/auth/logout` | 로그아웃 | - | 200 `message` |
+
+### 사용자 API (Protected)
+
+| 메서드 | 엔드포인트 | 설명 | 요청 Body | 응답 |
+|--------|-----------|------|----------|------|
+| GET | `/api/users/me` | 프로필 조회 | - | 200 `UserResponse` |
+| PUT | `/api/users/me` | 프로필 수정 | `UserUpdate` | 200 `UserResponse` |
+
+**인증 방식**: Bearer Token
+```http
+Authorization: Bearer {access_token}
+```
+
+### 스키마
+
+**UserCreate**:
+```json
+{
+  "email": "user@example.com",
+  "username": "username",
+  "password": "password123"
+}
+```
+
+**UserLogin**:
+```json
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+**Token**:
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer"
+}
+```
+
+**UserResponse**:
+```json
+{
+  "id": 1,
+  "email": "user@example.com",
+  "username": "username",
+  "is_active": true,
+  "created_at": "2026-02-10T12:00:00"
+}
+```
+
+**UserUpdate**:
+```json
+{
+  "username": "newusername",  // 선택
+  "email": "newemail@example.com"  // 선택
+}
+```
+
+**ErrorResponse**:
+```json
+{
+  "error": "ValidationError",
+  "message": "입력값 검증에 실패했습니다",
+  "details": [
+    {
+      "field": "body.email",
+      "message": "value is not a valid email address",
+      "type": "value_error.email"
+    }
+  ],
+  "status_code": 422
+}
+```
 
 ---
 
-## 테스트 시나리오
+## 인증 시스템
 
-### 1. 회원가입 플로우
-1. http://localhost:3000/register 접속
-2. 이메일, 사용자명, 비밀번호 입력
-3. "회원가입" 버튼 클릭
-4. ✅ 성공 → 자동 로그인 → 홈으로 리다이렉트
-5. ❌ 실패 → 에러 메시지 표시 (이메일/사용자명 중복)
+### JWT 토큰 관리
 
-### 2. 로그인 플로우
-1. http://localhost:3000/login 접속
-2. 이메일, 비밀번호 입력
-3. "로그인" 버튼 클릭
-4. ✅ 성공 → 홈으로 리다이렉트, 네비게이션에 사용자명 표시
-5. ❌ 실패 → 에러 메시지 표시
+**SECRET_KEY 설정**:
+- 환경 변수(`.env`) 우선 로드
+- 없으면 자동 생성 (개발 환경)
+- 프로덕션에서는 `.env`에 고정값 설정 필수
 
-### 3. 프로필 관리
-1. 네비게이션에서 "프로필" 클릭
-2. 사용자 정보 확인
-3. 사용자명 수정
-4. "프로필 수정" 버튼 클릭
-5. ✅ 성공 메시지 표시
-6. 네비게이션에 변경된 사용자명 표시
+```env
+# backend/.env
+SECRET_KEY=your-production-secret-key-min-64-characters-long
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+```
 
-### 4. 로그아웃
-1. 네비게이션에서 "로그아웃" 클릭
-2. 로그인 페이지로 리다이렉트
-3. 네비게이션 업데이트 (로그인/회원가입 표시)
+**토큰 생성**:
+```python
+# backend/app/utils/auth.py
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({"exp": expire})
 
-### 5. Protected Route
-1. 로그아웃 상태에서 http://localhost:3000/profile 직접 접속
-2. 자동으로 로그인 페이지로 리다이렉트
+    secret_key = get_secret_key()
+    algorithm = ALGORITHM
 
-### 6. 토큰 영속성
-1. 로그인 후 페이지 새로고침
-2. 로그인 상태 유지 확인 (localStorage에 토큰 저장)
+    encoded_jwt = jwt.encode(to_encode, secret_key, algorithm=algorithm)
+    return encoded_jwt
+```
+
+**토큰 검증**:
+```python
+# backend/app/dependencies/auth.py
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+    token_data = decode_access_token(token)
+    user = db.query(User).filter(User.email == token_data.email).first()
+
+    if user is None:
+        raise UnauthorizedException("사용자를 찾을 수 없습니다")
+
+    return user
+```
+
+### 비밀번호 해싱
+
+**SHA-256 + Salt**:
+```python
+# backend/app/utils/auth.py
+def hash_password(password: str) -> str:
+    salt = secrets.token_hex(16)  # 16 bytes = 32 hex chars
+    hashed = hashlib.sha256((salt + password).encode()).hexdigest()
+    return f"{salt}${hashed}"
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    salt, stored_hash = hashed_password.split('$')
+    hashed = hashlib.sha256((salt + plain_password).encode()).hexdigest()
+    return hashed == stored_hash
+```
+
+⚠️ **주의**: SHA-256은 비밀번호 해싱에 권장되지 않습니다. 프로덕션에서는 bcrypt, Argon2 사용을 권장합니다.
+
+### 프론트엔드 인증 플로우
+
+**AuthContext**:
+```typescript
+// frontend/src/contexts/AuthContext.tsx
+const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // 컴포넌트 마운트 시 토큰 확인
+  useEffect(() => {
+    const token = getToken();
+    if (token) {
+      getCurrentUser(token)
+        .then(setUser)
+        .catch(() => removeToken());
+    }
+    setLoading(false);
+  }, []);
+
+  // 로그인, 로그아웃, 회원가입 함수들...
+};
+```
+
+**Protected Route**:
+```typescript
+// frontend/src/components/ProtectedRoute.tsx
+export default function ProtectedRoute({ children }) {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/login');
+    }
+  }, [user, loading, router]);
+
+  if (loading) return <div>로딩 중...</div>;
+  if (!user) return null;
+
+  return <>{children}</>;
+}
+```
 
 ---
 
-## 보안 고려사항
+## 에러 처리
 
-### 백엔드
-1. **비밀번호 해싱**: bcrypt 사용 (saltRounds: 12)
-2. **JWT 토큰**:
-   - SECRET_KEY 최소 32자
-   - 만료 시간 30분
-   - 알고리즘: HS256
-3. **CORS**: localhost:3000 허용 (프로덕션에서 특정 도메인만 허용)
-4. **입력 검증**: Pydantic으로 타입 및 형식 검증
-5. **에러 메시지**: "이메일 또는 비밀번호가 올바르지 않습니다" (구체적 정보 노출 방지)
+### 백엔드: 전역 예외 핸들러
 
-### 프론트엔드
-1. **토큰 저장**: localStorage 사용 (XSS 취약 가능성 인지)
-2. **XSS 방지**: React의 기본 이스케이프 처리 활용
-3. **HTTPS**: 프로덕션에서 반드시 사용 (토큰 평문 전송)
-4. **클라이언트 검증**: UX 향상용, 서버 검증이 최종 보안 라인
+**HTTP 예외 핸들러** (401, 404, 403 등):
+```python
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": "HTTPException",
+            "message": exc.detail,
+            "status_code": exc.status_code
+        }
+    )
+```
+
+**Pydantic 검증 에러 핸들러** (422):
+```python
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    details = [
+        {
+            "field": ".".join(str(x) for x in error["loc"]),
+            "message": error["msg"],
+            "type": error["type"]
+        }
+        for error in exc.errors()
+    ]
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "ValidationError",
+            "message": "입력값 검증에 실패했습니다",
+            "details": details,
+            "status_code": 422
+        }
+    )
+```
+
+**커스텀 예외**:
+```python
+# backend/app/utils/exceptions.py
+class BadRequestException(HTTPException):
+    def __init__(self, detail: str):
+        super().__init__(status_code=400, detail=detail)
+
+class NotFoundException(HTTPException):
+    def __init__(self, detail: str = "리소스를 찾을 수 없습니다"):
+        super().__init__(status_code=404, detail=detail)
+
+class UnauthorizedException(HTTPException):
+    def __init__(self, detail: str = "인증이 필요합니다"):
+        super().__init__(status_code=401, detail=detail)
+
+class ForbiddenException(HTTPException):
+    def __init__(self, detail: str = "접근 권한이 없습니다"):
+        super().__init__(status_code=403, detail=detail)
+```
+
+### 프론트엔드: Toast 알림 시스템
+
+**Toast Context**:
+```typescript
+// frontend/src/contexts/ToastContext.tsx
+export function ToastProvider({ children }) {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const showToast = (type: ToastType, message: string, duration = 3000) => {
+    const id = Date.now().toString();
+    setToasts(prev => [...prev, { id, type, message, duration }]);
+
+    setTimeout(() => removeToast(id), duration);
+  };
+
+  const success = (message: string) => showToast('success', message);
+  const error = (message: string) => showToast('error', message);
+  const info = (message: string) => showToast('info', message);
+  const warning = (message: string) => showToast('warning', message);
+
+  // ...
+}
+```
+
+**Toast 컴포넌트**:
+- 타입별 색상: 성공(초록), 에러(빨강), 정보(파랑), 경고(노랑)
+- 자동 제거: 3초 후 사라짐
+- 애니메이션: 우측에서 슬라이드 인
+
+**사용 예시**:
+```typescript
+const { success, error } = useToast();
+
+try {
+  await login(email, password);
+  success('로그인 성공!');
+  router.push('/');
+} catch (err) {
+  error(getErrorMessage(err));
+}
+```
 
 ---
 
-## 향후 개선 사항
+## 테스트
 
-### Feature 8: 비밀번호 재설정 (선택사항)
-- 이메일 전송 기능 (SMTP 설정)
-- 재설정 토큰 생성 및 검증
-- 비밀번호 재설정 페이지
+### 백엔드 테스트 (pytest)
 
-### Feature 9: 에러 처리 강화
-- 전역 예외 핸들러 (FastAPI)
-- Toast/Alert 컴포넌트 (프론트엔드)
-- react-hook-form, zod 통합
+**실행 명령어**:
+```bash
+cd backend
 
-### Feature 10: 테스트
-- pytest로 백엔드 API 테스트
-- Playwright/Cypress로 E2E 테스트
-- 테스트 커버리지 측정
+# 모든 테스트 실행
+pytest
 
-### 추가 개선
-- **Refresh Token**: Access token 자동 갱신
-- **소셜 로그인**: OAuth2 (Google, GitHub 등)
-- **이메일 인증**: 회원가입 시 이메일 인증 링크
-- **비밀번호 변경**: 별도 엔드포인트
-- **사용자 역할 관리**: role 필드 추가 (user, admin)
-- **Rate Limiting**: 로그인 시도 제한
+# 커버리지와 함께 실행
+pytest --cov=app --cov-report=html
+
+# 특정 파일만 실행
+pytest tests/test_auth.py
+
+# 상세 출력
+pytest -v
+```
+
+**테스트 결과**:
+```
+====================== 42 passed in 2.71s ======================
+
+---------- coverage: platform win32, python 3.14.3-final-0 -----------
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+app\routers\auth.py               37      1    97%
+app\routers\users.py              26      0   100%
+app\utils\auth.py                 44      5    89%
+app\dependencies\auth.py          23      3    87%
+--------------------------------------------------
+TOTAL                            285     38    87%
+```
+
+**테스트 구조**:
+- `tests/test_auth.py`: 인증 API 테스트 (11개)
+- `tests/test_users.py`: 사용자 API 테스트 (13개)
+- `tests/test_error_handlers.py`: 예외 핸들러 테스트 (14개)
+- `tests/test_health.py`: Health Check 테스트 (6개)
+
+**주요 픽스처**:
+```python
+# tests/conftest.py
+@pytest.fixture
+def client(db_session):
+    """테스트 클라이언트"""
+    def override_get_db():
+        yield db_session
+    app.dependency_overrides[get_db] = override_get_db
+    yield TestClient(app)
+    app.dependency_overrides.clear()
+
+@pytest.fixture
+def authenticated_client(client, test_user_data):
+    """인증된 클라이언트"""
+    client.post("/api/auth/register", json=test_user_data)
+    response = client.post("/api/auth/login", json={
+        "email": test_user_data["email"],
+        "password": test_user_data["password"]
+    })
+    token = response.json()["access_token"]
+
+    class AuthClient:
+        def __init__(self, client, token):
+            self._client = client
+            self._token = token
+
+        def get(self, *args, **kwargs):
+            kwargs.setdefault('headers', {})['Authorization'] = f'Bearer {self._token}'
+            return self._client.get(*args, **kwargs)
+
+        # put, post, delete 메서드도 동일...
+
+    return AuthClient(client, token)
+```
+
+### 프론트엔드 테스트 (향후 구현)
+
+**권장 도구**:
+- Jest + React Testing Library (단위 테스트)
+- Playwright 또는 Cypress (E2E 테스트)
 
 ---
 
-## 참고 문서
+## 배포 가이드
 
-- **계획 문서**: `.claude/plans/enchanted-crafting-toucan.md`
-- **TODO**: `.claude/docs/login_todo.md`
-- **프로젝트 가이드**: `CLAUDE.md`
-- **포팅 가이드**: `.claude/docs/Porting_guide.md`
+### 백엔드 배포
+
+**환경 변수 설정** (필수):
+```env
+# 프로덕션 .env
+SECRET_KEY=<강력한-랜덤-문자열-최소-64자>
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+DATABASE_URL=postgresql://user:password@host:port/dbname
+```
+
+**데이터베이스 마이그레이션**:
+```bash
+# Alembic 사용 권장 (현재는 SQLAlchemy auto-create 사용)
+alembic upgrade head
+```
+
+**서버 실행**:
+```bash
+# Gunicorn + Uvicorn workers
+gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+```
+
+**Docker** (권장):
+```dockerfile
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+### 프론트엔드 배포
+
+**빌드**:
+```bash
+npm run build
+```
+
+**Vercel** (권장):
+```bash
+vercel deploy
+```
+
+**환경 변수** (Vercel):
+```env
+NEXT_PUBLIC_API_URL=https://your-backend-api.com
+```
+
+### 보안 체크리스트
+
+- [ ] SECRET_KEY를 강력한 랜덤 문자열로 변경
+- [ ] HTTPS 사용 (프로덕션 필수)
+- [ ] CORS 설정을 특정 도메인으로 제한
+- [ ] 비밀번호 해싱 알고리즘 변경 (bcrypt, Argon2)
+- [ ] Rate Limiting 추가
+- [ ] SQL Injection 방어 (SQLAlchemy ORM 사용 중)
+- [ ] XSS 방어 (React 기본 이스케이프 처리)
+- [ ] CSRF 토큰 (필요시)
 
 ---
 
-## 변경 이력
+## 다음 단계
 
-| 날짜 | 작업 | 담당 |
-|------|------|------|
-| 2026-02-10 | Phase 1: 백엔드 인증 시스템 구현 | be-agent |
-| 2026-02-10 | Phase 2: 프론트엔드 인증 UI 구현 | fe-agent |
+- [ ] 비밀번호 재설정 기능
+- [ ] Refresh Token 구현
+- [ ] 이메일 인증
+- [ ] 소셜 로그인 (OAuth2)
+- [ ] 프론트엔드 테스트 (Jest, Playwright)
+- [ ] CI/CD 파이프라인 (GitHub Actions)
+- [ ] Docker Compose 설정
+- [ ] 프로덕션 데이터베이스 (PostgreSQL)
+- [ ] 로깅 시스템 (Loguru, Sentry)
+- [ ] API 버전 관리
+
+---
+
+## 참고 자료
+
+- **FastAPI 공식 문서**: https://fastapi.tiangolo.com/
+- **Next.js 공식 문서**: https://nextjs.org/docs
+- **JWT 소개**: https://jwt.io/introduction
+- **pytest 문서**: https://docs.pytest.org/
+- **Tailwind CSS 문서**: https://tailwindcss.com/docs
+
+---
+
+## 문의 및 기여
+
+프로젝트 관련 문의 사항이나 버그 리포트는 GitHub Issues를 이용해주세요.
+
+**작성일**: 2026-02-10
+**작성자**: be-agent, fe-agent, main-agent

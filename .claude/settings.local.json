@@ -5,7 +5,21 @@
       "Bash(git:*)",
       "Bash(dir:*)",
       "Bash(if not exist \".claude\\\\docs\" mkdir .claudedocs)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(.venv/Scripts/python:*)",
+      "Bash(test:*)",
+      "Bash(.venv/Scripts/python.exe:*)",
+      "Bash(powershell -Command \"Invoke-WebRequest -Uri ''https://sqlite.org/2026/sqlite-tools-win-x64-3510200.zip'' -OutFile ''sqlite-tools.zip''\")",
+      "Bash(C:/sqlite/sqlite3.exe:*)",
+      "Bash(powershell -Command \"[Environment]::SetEnvironmentVariable\\(''Path'', [Environment]::GetEnvironmentVariable\\(''Path'', ''User''\\) + '';C:\\\\sqlite'', ''User''\\)\")",
+      "Bash(.venvScriptspython.exe -c \"from app.main import app; print\\(''✓ 서버 모듈 import 성공''\\)\")",
+      "Bash(if exist app.db del app.db)",
+      "Bash(powershell:*)",
+      "Bash(timeout:*)",
+      "Bash(.venvScriptspython.exe -m pip install pytest==7.4.3 pytest-asyncio==0.21.1 httpx==0.25.2 pytest-cov==4.1.0 -q)",
+      "Bash(.venv/Scripts/pip.exe install:*)",
+      "Bash(where:*)",
+      "Bash(pytest:*)"
     ]
   }
 }

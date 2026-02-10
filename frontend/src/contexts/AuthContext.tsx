@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { User, UserCreate, UserUpdate } from '@/types/user';
 import * as authApi from '@/api/auth';
 import { getToken, setToken as saveToken, removeToken } from '@/utils/token';
+import { getErrorMessage } from '@/utils/api-error';
 
 interface AuthContextType {
   user: User | null;
@@ -13,6 +14,7 @@ interface AuthContextType {
   logout: () => void;
   register: (data: UserCreate) => Promise<void>;
   updateUser: (data: UserUpdate) => Promise<void>;
+  showToast?: (type: 'success' | 'error' | 'info' | 'warning', message: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);

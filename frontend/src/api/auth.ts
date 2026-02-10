@@ -12,8 +12,11 @@ export async function register(data: UserCreate): Promise<User> {
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || '회원가입에 실패했습니다.');
+    const errorData = await response.json();
+    // 백엔드 에러 형식에 맞춰 에러 객체 구성
+    const error: any = new Error(errorData.message || errorData.detail || '회원가입에 실패했습니다.');
+    error.response = { data: errorData };
+    throw error;
   }
 
   return response.json();
@@ -29,8 +32,10 @@ export async function login(data: UserLogin): Promise<Token> {
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || '로그인에 실패했습니다.');
+    const errorData = await response.json();
+    const error: any = new Error(errorData.message || errorData.detail || '로그인에 실패했습니다.');
+    error.response = { data: errorData };
+    throw error;
   }
 
   return response.json();
@@ -46,8 +51,10 @@ export async function getCurrentUser(token: string): Promise<User> {
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || '사용자 정보를 가져올 수 없습니다.');
+    const errorData = await response.json();
+    const error: any = new Error(errorData.message || errorData.detail || '사용자 정보를 가져올 수 없습니다.');
+    error.response = { data: errorData };
+    throw error;
   }
 
   return response.json();
@@ -64,8 +71,10 @@ export async function updateProfile(token: string, data: UserUpdate): Promise<Us
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || '프로필 수정에 실패했습니다.');
+    const errorData = await response.json();
+    const error: any = new Error(errorData.message || errorData.detail || '프로필 수정에 실패했습니다.');
+    error.response = { data: errorData };
+    throw error;
   }
 
   return response.json();

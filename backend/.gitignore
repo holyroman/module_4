@@ -26,3 +26,9 @@ env/
 dist/
 build/
 *.egg-info/
+
+# Testing
+.pytest_cache/
+htmlcov/
+.coverage
+test.db
