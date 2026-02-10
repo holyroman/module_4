@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from app.database import Base
 
@@ -13,5 +13,10 @@ class Admin(Base):
     hashed_password = Column(String(255), nullable=False)
     role = Column(String(50), default="admin")  # "admin", "super_admin"
     is_active = Column(Boolean, default=True)
+
+    # 2차 인증 필드
+    enable_2fa = Column(Boolean, default=False)
+    auth_profile_id = Column(Integer, ForeignKey("auth_profiles.id"), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

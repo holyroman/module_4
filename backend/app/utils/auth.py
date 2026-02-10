@@ -84,3 +84,35 @@ def decode_access_token(token: str) -> TokenData:
         return TokenData(email=email)
     except JWTError:
         raise UnauthorizedException("유효하지 않은 토큰입니다")
+
+
+def create_temp_token(email: str) -> str:
+    """2차 인증용 임시 토큰 생성 (5분 유효)"""
+    expire = datetime.utcnow() + timedelta(minutes=5)
+    to_encode = {
+        "sub": email,
+        "type": "temp_2fa",
+        "exp": expire
+    }
+    secret_key = get_secret_key()
+    encoded_jwt = jwt.encode(to_encode, secret_key, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+def verify_temp_token(token: str) -> str:
+    """임시 토큰 검증 및 이메일 추출"""
+    secret_key = get_secret_key()
+    try:
+        payload = jwt.decode(token, secret_key, algorithms=[ALGORITHM])
+        token_type = payload.get("type")
+        email = payload.get("sub")
+
+        if token_type != "temp_2fa":
+            raise UnauthorizedException("유효하지 않은 임시 토큰입니다")
+
+        if email is None:
+            raise UnauthorizedException("유효하지 않은 임시 토큰입니다")
+
+        return email
+    except JWTError:
+        raise UnauthorizedException("유효하지 않거나 만료된 임시 토큰입니다")

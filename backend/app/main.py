@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.database import engine, Base
-from app.routers import examples, auth, users, admin
+from app.routers import examples, auth, users, admin, auth_profiles, email_configs, emails
 from app.utils.auth import set_secret_key
 
 # 환경 변수 로드
@@ -44,6 +44,9 @@ app.include_router(examples.router)
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(admin.router)
+app.include_router(auth_profiles.router)
+app.include_router(email_configs.router)
+app.include_router(emails.router)
 
 
 # ============================================

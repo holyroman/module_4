@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import User
-from app.schemas import UserResponse, UserUpdate
+from app.models import User, AuthProfile
+from app.schemas import UserResponse, UserUpdate, User2FASettings
 from app.dependencies.auth import get_current_active_user
-from app.utils.exceptions import BadRequestException
+from app.utils.exceptions import BadRequestException, NotFoundException
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -42,6 +42,35 @@ def update_current_user_profile(
         if existing_user:
             raise BadRequestException("이미 등록된 이메일입니다")
         current_user.email = user_update.email
+
+    db.commit()
+    db.refresh(current_user)
+
+    return current_user
+
+
+@router.put("/me/2fa", response_model=UserResponse)
+def update_user_2fa_settings(
+    settings: User2FASettings,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """현재 사용자의 2차 인증 설정 변경"""
+    # 2FA 활성화 시 auth_profile_id 필수
+    if settings.enable_2fa:
+        if not settings.auth_profile_id:
+            raise BadRequestException("2차 인증을 활성화하려면 인증 프로필을 선택해야 합니다")
+
+        # 인증 프로필 존재 및 활성화 확인
+        profile = db.query(AuthProfile).filter(AuthProfile.id == settings.auth_profile_id).first()
+        if not profile:
+            raise NotFoundException("인증 프로필을 찾을 수 없습니다")
+        if not profile.is_active:
+            raise BadRequestException("비활성화된 인증 프로필입니다")
+
+    # 설정 업데이트
+    current_user.enable_2fa = settings.enable_2fa
+    current_user.auth_profile_id = settings.auth_profile_id if settings.enable_2fa else None
 
     db.commit()
     db.refresh(current_user)

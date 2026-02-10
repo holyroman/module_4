@@ -3,15 +3,14 @@
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { getErrorMessage } from '@/utils/api-error';
+import * as authApi from '@/api/auth';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
   const { success, error: showError } = useToast();
   const router = useRouter();
 
@@ -20,9 +19,28 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await login(email, password);
-      success('로그인 성공!');
-      router.push('/');
+      const response = await authApi.login({ email, password });
+
+      // 2FA가 필요한 경우
+      if (response.requires_2fa) {
+        if (!response.temp_token) {
+          throw new Error('임시 토큰을 받지 못했습니다.');
+        }
+        // 임시 토큰을 세션 스토리지에 저장하고 2FA 화면으로 이동
+        sessionStorage.setItem('temp_token', response.temp_token);
+        router.push('/auth/verify-2fa');
+        return;
+      }
+
+      // 2FA가 필요없는 경우 바로 로그인 처리
+      if (response.access_token) {
+        const { setToken } = await import('@/utils/token');
+        setToken(response.access_token);
+        success('로그인 성공!');
+        router.push('/');
+      } else {
+        throw new Error('토큰을 받지 못했습니다.');
+      }
     } catch (err) {
       showError(getErrorMessage(err));
     } finally {

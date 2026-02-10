@@ -4,9 +4,24 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User
-from app.schemas import UserCreate, UserLogin, UserResponse, Token
-from app.utils.auth import hash_password, verify_password, create_access_token
+from app.schemas import (
+    UserCreate,
+    UserLogin,
+    UserResponse,
+    Token,
+    LoginResponse,
+    TwoFactorAuthRequest,
+    TwoFactorAuthResponse
+)
+from app.utils.auth import (
+    hash_password,
+    verify_password,
+    create_access_token,
+    create_temp_token,
+    verify_temp_token
+)
 from app.utils.exceptions import BadRequestException, UnauthorizedException, ForbiddenException
+from app.services.external_auth import verify_external_auth
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -40,9 +55,9 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     return new_user
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=LoginResponse)
 def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
-    """로그인"""
+    """로그인 (1차 인증)"""
     # 이메일로 사용자 조회
     user = db.query(User).filter(User.email == user_credentials.email).first()
     if not user:
@@ -56,12 +71,60 @@ def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
     if not user.is_active:
         raise ForbiddenException("비활성 사용자입니다")
 
-    # JWT 토큰 생성
-    access_token = create_access_token(
-        data={"sub": user.email}
+    # 2차 인증 필요 여부 확인
+    if user.enable_2fa and user.auth_profile_id:
+        # 2차 인증 필요: 임시 토큰 발급
+        temp_token = create_temp_token(user.email)
+        return LoginResponse(
+            requires_2fa=True,
+            temp_token=temp_token,
+            access_token=None,
+            message="2차 인증이 필요합니다. /auth/verify-2fa 엔드포인트로 인증을 완료하세요."
+        )
+
+    # 2차 인증 불필요: 바로 JWT 토큰 발급
+    access_token = create_access_token(data={"sub": user.email})
+    return LoginResponse(
+        requires_2fa=False,
+        temp_token=None,
+        access_token=access_token,
+        message="로그인 성공"
     )
 
-    return {"access_token": access_token, "token_type": "bearer"}
+
+@router.post("/verify-2fa", response_model=TwoFactorAuthResponse)
+def verify_2fa(auth_request: TwoFactorAuthRequest, db: Session = Depends(get_db)):
+    """2차 인증 검증"""
+    # 임시 토큰 검증 및 이메일 추출
+    email = verify_temp_token(auth_request.temp_token)
+
+    # 사용자 조회
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise UnauthorizedException("사용자를 찾을 수 없습니다")
+
+    # 2차 인증이 활성화되어 있는지 확인
+    if not user.enable_2fa or not user.auth_profile_id:
+        raise BadRequestException("2차 인증이 설정되지 않았습니다")
+
+    # 외부 인증 수행
+    success, error_msg = verify_external_auth(
+        db=db,
+        profile_id=user.auth_profile_id,
+        username=user.username,
+        password=auth_request.password
+    )
+
+    if not success:
+        raise UnauthorizedException(f"2차 인증 실패: {error_msg}")
+
+    # 인증 성공: 최종 JWT 토큰 발급
+    access_token = create_access_token(data={"sub": user.email})
+
+    return TwoFactorAuthResponse(
+        access_token=access_token,
+        token_type="bearer"
+    )
 
 
 @router.post("/logout")

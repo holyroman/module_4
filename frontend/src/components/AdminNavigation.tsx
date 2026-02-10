@@ -31,9 +31,17 @@ export default function AdminNavigation() {
                 대시보드
               </Link>
               {admin?.role === 'super_admin' && (
-                <Link href="/admin/users" className="hover:text-gray-300">
-                  관리자 관리
-                </Link>
+                <>
+                  <Link href="/admin/users" className="hover:text-gray-300">
+                    관리자 관리
+                  </Link>
+                  <Link href="/admin/auth-profiles" className="hover:text-gray-300">
+                    인증 프로필
+                  </Link>
+                  <Link href="/admin/user-management" className="hover:text-gray-300">
+                    사용자 관리
+                  </Link>
+                </>
               )}
               <span className="text-gray-400">
                 {admin?.username} ({admin?.role})

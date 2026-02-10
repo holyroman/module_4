@@ -1,4 +1,5 @@
 import { Admin, AdminCreate, AdminLogin, AdminToken, AdminUpdate } from '@/types/admin';
+import { TwoFactorSettings } from '@/types/user';
 import { getAdminToken } from '@/utils/admin-token';
 
 const API_URL = '/api/admin';
@@ -81,4 +82,23 @@ export async function deleteAdmin(token: string, adminId: number): Promise<void>
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error(await response.text());
+}
+
+// 관리자용 사용자 2FA 설정
+export async function updateUser2FA(token: string, userId: number, data: TwoFactorSettings): Promise<void> {
+  const response = await fetch(`${API_URL}/users/${userId}/2fa`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    const error: any = new Error(errorData.message || errorData.detail || '사용자 2FA 설정에 실패했습니다.');
+    error.response = { data: errorData };
+    throw error;
+  }
 }

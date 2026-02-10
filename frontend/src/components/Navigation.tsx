@@ -35,6 +35,12 @@ export default function Navigation() {
                 >
                   프로필
                 </Link>
+                <Link
+                  href="/settings/2fa"
+                  className="text-gray-700 hover:text-indigo-600 transition-colors"
+                >
+                  2FA 설정
+                </Link>
                 <button
                   onClick={handleLogout}
                   className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"

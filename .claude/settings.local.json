@@ -19,7 +19,11 @@
       "Bash(.venvScriptspython.exe -m pip install pytest==7.4.3 pytest-asyncio==0.21.1 httpx==0.25.2 pytest-cov==4.1.0 -q)",
       "Bash(.venv/Scripts/pip.exe install:*)",
       "Bash(where:*)",
-      "Bash(pytest:*)"
+      "Bash(pytest:*)",
+      "Bash(.venvScriptsactivate)",
+      "Bash(.venvScriptspython.exe -m pip install ldap3 pyrad tacacs_plus cryptography)",
+      "Bash(.venvScriptspython.exe -c \"import sqlite3; conn=sqlite3.connect\\(''app.db''\\); cur=conn.cursor\\(\\); cur.execute\\(''SELECT sql FROM sqlite_master WHERE name=\"\"admins\"\"''\\); print\\(cur.fetchone\\(\\)[0]\\); conn.close\\(\\)\")",
+      "Bash(.venvScriptspython.exe -c \"from app.database import engine, Base; from app.models import EmailServerConfig, EmailLog; Base.metadata.create_all\\(bind=engine\\); print\\(''데이터베이스 테이블 생성 완료''\\)\")"
     ]
   }
 }

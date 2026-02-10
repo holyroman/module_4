@@ -6,6 +6,8 @@ from typing import List
 from app.database import get_db
 from app.models.admin import Admin
 from app.models.admin_session import AdminSession
+from app.models.user import User
+from app.models.auth_profile import AuthProfile
 from app.schemas.admin import (
     AdminCreate,
     AdminLogin,
@@ -13,6 +15,7 @@ from app.schemas.admin import (
     AdminUpdate,
     AdminToken
 )
+from app.schemas.two_factor import User2FASettings
 from app.dependencies.admin_auth import (
     get_current_active_admin,
     get_super_admin,
@@ -235,3 +238,46 @@ def delete_admin(
     db.commit()
 
     return None
+
+
+# ============================================
+# 사용자 2FA 관리 엔드포인트 (관리자 전용)
+# ============================================
+
+@router.put("/users/{user_id}/2fa", response_model=dict)
+def admin_update_user_2fa(
+    user_id: int,
+    settings: User2FASettings,
+    current_admin: Admin = Depends(get_current_active_admin),
+    db: Session = Depends(get_db)
+):
+    """관리자가 사용자의 2차 인증 설정 변경"""
+    # 사용자 조회
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise NotFoundException("사용자를 찾을 수 없습니다")
+
+    # 2FA 활성화 시 auth_profile_id 필수
+    if settings.enable_2fa:
+        if not settings.auth_profile_id:
+            raise BadRequestException("2차 인증을 활성화하려면 인증 프로필을 선택해야 합니다")
+
+        # 인증 프로필 존재 및 활성화 확인
+        profile = db.query(AuthProfile).filter(AuthProfile.id == settings.auth_profile_id).first()
+        if not profile:
+            raise NotFoundException("인증 프로필을 찾을 수 없습니다")
+        if not profile.is_active:
+            raise BadRequestException("비활성화된 인증 프로필입니다")
+
+    # 설정 업데이트
+    user.enable_2fa = settings.enable_2fa
+    user.auth_profile_id = settings.auth_profile_id if settings.enable_2fa else None
+
+    db.commit()
+
+    return {
+        "message": f"사용자 '{user.username}'의 2차 인증 설정이 업데이트되었습니다",
+        "user_id": user.id,
+        "enable_2fa": user.enable_2fa,
+        "auth_profile_id": user.auth_profile_id
+    }

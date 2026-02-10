@@ -10,3 +10,8 @@ pytest==7.4.3
 pytest-asyncio==0.21.1
 httpx==0.25.2
 pytest-cov==4.1.0
+# 외부 인증 및 암호화
+ldap3==2.9.1
+pyrad==2.5.4
+tacacs_plus==2.6
+cryptography==46.0.4
