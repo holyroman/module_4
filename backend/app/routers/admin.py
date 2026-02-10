@@ -85,6 +85,14 @@ def admin_logout(
     return {"message": "로그아웃되었습니다"}
 
 
+@router.get("/users/me", response_model=AdminResponse)
+def get_current_admin_profile(
+    current_admin: Admin = Depends(get_current_active_admin)
+):
+    """현재 로그인한 관리자 프로필 조회"""
+    return current_admin
+
+
 # ============================================
 # 관리자 CRUD 엔드포인트 (슈퍼 관리자 전용)
 # ============================================
