@@ -182,6 +182,18 @@ def update_admin(
         if existing_username:
             raise BadRequestException("이미 사용 중인 사용자명입니다")
 
+    # role 변경 시 최소 1명의 슈퍼 관리자 유지 검증
+    if "role" in update_data and admin.role == "super_admin" and update_data["role"] != "super_admin":
+        # 다른 슈퍼 관리자가 있는지 확인 (현재 관리자 제외)
+        other_super_admins = db.query(Admin).filter(
+            Admin.role == "super_admin",
+            Admin.id != admin_id,
+            Admin.is_active == True
+        ).count()
+
+        if other_super_admins == 0:
+            raise BadRequestException("시스템에 최소 1명의 슈퍼 관리자가 필요합니다")
+
     # 필드 업데이트
     for key, value in update_data.items():
         setattr(admin, key, value)
@@ -206,6 +218,17 @@ def delete_admin(
     # 자기 자신은 삭제 불가
     if admin.id == current_admin.id:
         raise BadRequestException("자기 자신은 삭제할 수 없습니다")
+
+    # 슈퍼 관리자 삭제 시 최소 1명 유지 검증
+    if admin.role == "super_admin":
+        other_super_admins = db.query(Admin).filter(
+            Admin.role == "super_admin",
+            Admin.id != admin_id,
+            Admin.is_active == True
+        ).count()
+
+        if other_super_admins == 0:
+            raise BadRequestException("시스템에 최소 1명의 슈퍼 관리자가 필요합니다")
 
     # 관리자 삭제
     db.delete(admin)
